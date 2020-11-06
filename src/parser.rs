@@ -3,6 +3,37 @@ use crate::{
     Error,
 };
 
+/// Iterator over the arguments in an input string.
+///
+/// The individual returned items for an input string `&'a str` are `Result<&'a str, Error>` (see
+/// [error-handling](#error-handling) below for notes on the individual results). Escape sequences in the format
+/// `\<character>` are parsed as normal characters. The iterator will return `None` once the input has been exhausted.
+///
+/// ```rust
+/// # use shtring::Parser;
+/// let input = "a \"b c\" \\\"d";
+/// let mut parser = Parser::new(input);
+/// assert_eq!(parser.next(), Some(Ok("a")));
+/// assert_eq!(parser.next(), Some(Ok("b c")));
+/// assert_eq!(parser.next(), Some(Ok("\\\"d")));
+/// assert_eq!(parser.next(), None);
+/// ```
+///
+/// # Error handling
+///
+/// The parser will recover from any errors encountered while parsing individual arguments. This means that if some
+/// argument fails to be parsed, there still may be more valid arguments after it, in the sense that the erroneous
+/// argument was ignored.
+///
+/// ```rust
+/// # use shtring::{Error, Parser};
+/// let input = "a b\" c";
+/// let mut parser = Parser::new(input);
+/// assert_eq!(parser.next(), Some(Ok("a")));
+/// assert_eq!(parser.next(), Some(Err(Error::UnexpectedToken(3, "\""))));
+/// assert_eq!(parser.next(), Some(Ok("c")));
+/// assert_eq!(parser.next(), None);
+/// ```
 #[derive(Debug)]
 pub struct Parser<'a> {
     input: &'a str,
@@ -10,6 +41,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Return a new [Parser](Parser) over a given input string.
     pub fn new(input: &'a str) -> Self {
         Self {
             input,
