@@ -2,19 +2,18 @@ use crate::{
     lexer::{Lexer, Token},
     Error,
 };
-use std::iter::Peekable;
 
 #[derive(Debug)]
 pub struct Parser<'a> {
     input: &'a str,
-    lexer: Peekable<Lexer<'a>>,
+    lexer: Lexer<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             input,
-            lexer: Lexer::new(input).peekable(),
+            lexer: Lexer::new(input),
         }
     }
 }
