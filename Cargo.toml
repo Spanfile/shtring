@@ -1,7 +1,13 @@
 [package]
 authors = ["Spanfile <spansdev@gmail.com>"]
+categories = ["algorithms", "command-line-interface", "parsing"]
+description = "Split an input string into arguments by whitespace such that text between matching quotes is combined into a single argument."
 edition = "2018"
+keywords = ["algorithms", "shell", "arguments"]
+license = "MIT"
 name = "shtring"
+readme = "README.md"
+repository = "https://github.com/Spanfile/shtring"
 version = "0.1.0"
 
 [dependencies]
