@@ -1,5 +1,5 @@
 use crate::Error;
-use std::{iter::Peekable, str::CharIndices};
+use std::{fmt, fmt::Display, iter::Peekable, str::CharIndices};
 
 #[derive(Debug)]
 pub(crate) struct Lexer<'a> {
@@ -10,10 +10,32 @@ pub(crate) struct Lexer<'a> {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum Token<'a> {
     Word(&'a str),
-    Whitespace,
+    Whitespace(&'a str),
     SingleQuote,
     DoubleQuote,
     Escape(&'a str),
+    UnknownCharacter(char),
+}
+
+impl Token<'_> {
+    pub fn len(self) -> usize {
+        match self {
+            Token::Word(w) | Token::Whitespace(w) | Token::Escape(w) => w.len(),
+            Token::UnknownCharacter(c) => c.len_utf8(),
+            Token::SingleQuote | Token::DoubleQuote => 1,
+        }
+    }
+}
+
+impl Display for Token<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::Word(w) | Token::Whitespace(w) | Token::Escape(w) => write!(f, "{}", w),
+            Token::UnknownCharacter(c) => write!(f, "{}", c),
+            Token::SingleQuote => write!(f, "'"),
+            Token::DoubleQuote => write!(f, "\""),
+        }
+    }
 }
 
 impl<'a> Lexer<'a> {
@@ -26,7 +48,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<(usize, Token<'a>), Error>;
+    type Item = Result<(usize, Token<'a>), Error<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.chars.next() {
@@ -38,13 +60,15 @@ impl<'a> Iterator for Lexer<'a> {
                     None => Some(Err(Error::UnexpectedEndOfInput)),
                 },
                 c if c.is_whitespace() => {
+                    let mut end = idx;
                     loop {
                         match self.chars.peek() {
-                            Some((_, c)) if c.is_whitespace() => self.chars.next(),
+                            Some((cont, c)) if c.is_whitespace() => end = *cont,
                             _ => break,
-                        };
+                        }
+                        self.chars.next();
                     }
-                    Some(Ok((idx, Token::Whitespace)))
+                    Some(Ok((idx, Token::Whitespace(&self.input[(idx..end + 1)]))))
                 }
                 c if is_word_character(c) => {
                     let mut end = idx;
@@ -57,7 +81,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     Some(Ok((idx, Token::Word(&self.input[(idx..end + 1)]))))
                 }
-                _ => Some(Err(Error::UnsupportedCharacter)),
+                c => Some(Ok((idx, Token::UnknownCharacter(c)))),
             },
             None => None,
         }
@@ -70,7 +94,10 @@ fn is_word_character(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+
     use super::*;
+    use test::Bencher;
 
     #[test]
     fn single_character_word_token() {
@@ -109,7 +136,7 @@ mod tests {
         let input = " ";
         let mut lexer = Lexer::new(input);
         let output = lexer.next();
-        assert_eq!(output, Some(Ok((0, Token::Whitespace))));
+        assert_eq!(output, Some(Ok((0, Token::Whitespace(input)))));
     }
 
     #[test]
@@ -117,7 +144,7 @@ mod tests {
         let input = " \t";
         let mut lexer = Lexer::new(input);
         let output = lexer.next();
-        assert_eq!(output, Some(Ok((0, Token::Whitespace))));
+        assert_eq!(output, Some(Ok((0, Token::Whitespace(input)))));
     }
 
     #[test]
@@ -136,24 +163,26 @@ mod tests {
         assert_eq!(output, Some(Err(Error::UnexpectedEndOfInput)));
     }
 
-    #[test]
-    fn multiple_tokens() {
-        let input = "'hello,' \"world!\" \\\"";
-        let lexer = Lexer::new(input);
-        let output: Vec<Result<(usize, Token<'_>), Error>> = lexer.collect();
-        assert_eq!(
-            output,
-            vec![
-                Ok((0, Token::SingleQuote)),
-                Ok((1, Token::Word("hello,"))),
-                Ok((7, Token::SingleQuote)),
-                Ok((8, Token::Whitespace)),
-                Ok((9, Token::DoubleQuote)),
-                Ok((10, Token::Word("world!"))),
-                Ok((16, Token::DoubleQuote)),
-                Ok((17, Token::Whitespace)),
-                Ok((18, Token::Escape("\\\"")))
-            ]
-        );
+    #[bench]
+    fn multiple_tokens(b: &mut Bencher) {
+        b.iter(|| {
+            let input = "'hello,' \"world!\" \\\"";
+            let lexer = Lexer::new(input);
+            let output: Vec<Result<(usize, Token<'_>), Error>> = lexer.collect();
+            assert_eq!(
+                output,
+                vec![
+                    Ok((0, Token::SingleQuote)),
+                    Ok((1, Token::Word("hello,"))),
+                    Ok((7, Token::SingleQuote)),
+                    Ok((8, Token::Whitespace(" "))),
+                    Ok((9, Token::DoubleQuote)),
+                    Ok((10, Token::Word("world!"))),
+                    Ok((16, Token::DoubleQuote)),
+                    Ok((17, Token::Whitespace(" "))),
+                    Ok((18, Token::Escape("\\\"")))
+                ]
+            );
+        });
     }
 }
